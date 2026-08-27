@@ -231,6 +231,13 @@ def test_contract_surface_and_lifecycle_invariants():
 
 def test_lifecycle_rejects_missing_duplicate_and_resubmitted_operations():
     contract = m.MilestoneJudge()
+    # The real GenVM creates these from class annotations; the lightweight unit stub does not.
+    class Map(dict):
+        def contains(self, key):
+            return key in self
+
+    contract.milestones = Map()
+    contract.adjudications = Map()
     with pytest.raises(Exception, match="does not exist"):
         contract.submit_evidence("missing", ["https://example.com"])
     with pytest.raises(Exception, match="does not exist"):
@@ -260,3 +267,11 @@ def test_contract_source_integrity_guard():
     assert SOURCE.stat().st_size > 0
     assert len(SOURCE.read_text().splitlines()) >= 250
     assert "class MilestoneJudge(gl.Contract):" in SOURCE.read_text()
+
+
+def test_storage_descriptors_are_not_manually_initialized():
+    source = SOURCE.read_text()
+    assert "def __init__(self):\n        pass" in source
+    assert "self.milestones = TreeMap()" not in source
+    assert "self.adjudications = TreeMap()" not in source
+    assert "DynArray[" in source

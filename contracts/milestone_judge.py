@@ -297,8 +297,7 @@ class MilestoneJudge(gl.Contract):
     adjudications: TreeMap[str, Adjudication]
 
     def __init__(self):
-        self.milestones = TreeMap()
-        self.adjudications = TreeMap()
+        pass
 
     @gl.public.write
     def create_milestone(self, milestone_id: str, title: str, description: str, acceptance_criteria: List[str]) -> None:

@@ -311,7 +311,7 @@ class MilestoneJudge(gl.Contract):
             _error("Milestone already exists")
         _validate_criteria(acceptance_criteria)
         self.milestones[milestone_id] = Milestone(
-            milestone_id, gl.message.sender_address, title.strip(), description.strip(),
+            milestone_id, str(gl.message.sender_address), title.strip(), description.strip(),
             acceptance_criteria, [], CREATED,
         )
 

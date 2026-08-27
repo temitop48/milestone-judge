@@ -286,3 +286,10 @@ def test_storage_descriptors_are_not_manually_initialized():
     assert "self.milestones = TreeMap()" not in source
     assert "self.adjudications = TreeMap()" not in source
     assert "DynArray[" in source
+
+
+def test_sender_address_is_converted_to_string_before_storage():
+    source = Path("contracts/milestone_judge.py").read_text()
+
+    assert "str(gl.message.sender_address)" in source
+    assert "milestone_id, gl.message.sender_address," not in source

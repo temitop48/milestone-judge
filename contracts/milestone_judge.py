@@ -307,7 +307,7 @@ class MilestoneJudge(gl.Contract):
             _error("Title must not be empty")
         if not isinstance(description, str) or not description.strip():
             _error("Description must not be empty")
-        if self.milestones.contains(milestone_id):
+        if milestone_id in self.milestones:
             _error("Milestone already exists")
         _validate_criteria(acceptance_criteria)
         self.milestones[milestone_id] = Milestone(
@@ -317,7 +317,7 @@ class MilestoneJudge(gl.Contract):
 
     @gl.public.write
     def submit_evidence(self, milestone_id: str, evidence_urls: List[str]) -> None:
-        if not self.milestones.contains(milestone_id):
+        if milestone_id not in self.milestones:
             _error("Milestone does not exist")
         milestone = self.milestones[milestone_id]
         if milestone.status != CREATED:
@@ -329,12 +329,12 @@ class MilestoneJudge(gl.Contract):
 
     @gl.public.write
     def adjudicate_milestone(self, milestone_id: str) -> None:
-        if not self.milestones.contains(milestone_id):
+        if milestone_id not in self.milestones:
             _error("Milestone does not exist")
         milestone = self.milestones[milestone_id]
         if milestone.status != EVIDENCE_SUBMITTED:
             _error("Milestone must have submitted evidence")
-        if self.adjudications.contains(milestone_id):
+        if milestone_id in self.adjudications:
             _error("Milestone has already been adjudicated")
         snapshot = {
             "milestone_id": milestone.milestone_id,
@@ -375,20 +375,20 @@ class MilestoneJudge(gl.Contract):
 
     @gl.public.view
     def get_milestone(self, milestone_id: str) -> Milestone:
-        if not self.milestones.contains(milestone_id):
+        if milestone_id not in self.milestones:
             _error("Milestone does not exist")
         return self.milestones[milestone_id]
 
     @gl.public.view
     def get_adjudication(self, milestone_id: str) -> Adjudication:
-        if not self.adjudications.contains(milestone_id):
+        if milestone_id not in self.adjudications:
             _error("Adjudication does not exist")
         return self.adjudications[milestone_id]
 
     @gl.public.view
     def milestone_exists(self, milestone_id: str) -> bool:
-        return self.milestones.contains(milestone_id)
+        return milestone_id in self.milestones
 
     @gl.public.view
     def adjudication_exists(self, milestone_id: str) -> bool:
-        return self.adjudications.contains(milestone_id)
+        return milestone_id in self.adjudications

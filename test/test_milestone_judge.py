@@ -269,6 +269,17 @@ def test_contract_source_integrity_guard():
     assert "class MilestoneJudge(gl.Contract):" in SOURCE.read_text()
 
 
+
+def test_treemap_membership_uses_python_membership_operator():
+    source = Path("contracts/milestone_judge.py").read_text()
+
+    assert ".contains(" not in source
+    assert "milestone_id in self.milestones" in source
+    assert "milestone_id not in self.milestones" in source
+    assert "milestone_id in self.adjudications" in source
+    assert "milestone_id not in self.adjudications" in source
+
+
 def test_storage_descriptors_are_not_manually_initialized():
     source = SOURCE.read_text()
     assert "def __init__(self):\n        pass" in source

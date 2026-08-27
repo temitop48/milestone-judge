@@ -1,0 +1,13 @@
+{
+  "milestone_id": "docs-release-001",
+  "title": "Publish the v1 integration guide",
+  "description": "Deliver the public integration guide and examples.",
+  "acceptance_criteria": [
+    "The guide documents installation and configuration.",
+    "The guide includes a working usage example."
+  ],
+  "evidence_urls": [
+    "https://example.com/integration-guide",
+    "https://example.com/integration-example"
+  ]
+}

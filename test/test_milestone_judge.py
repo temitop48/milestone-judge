@@ -383,19 +383,19 @@ def test_material_consensus_rejects_verdict_status_and_count_disagreement():
     assert m._material(base) != m._material(changed(accessible_evidence_count=0))
     assert m._material(base) != m._material(changed(total_evidence_count=0))
     assert m._material(base) != m._material({**base, "criterion_statuses": [m.UNSATISFIED]})
-    assert m._material(base) != m._material(changed(
+    assert m._material(base) == m._material(changed(
         normalized_evidence=[{**evidence, "accessible": False}]
     ))
-    assert m._material(base) != m._material(changed(
+    assert m._material(base) == m._material(changed(
         normalized_evidence=[{**evidence, "relevant_criteria": []}]
     ))
-    assert m._material(base) != m._material(changed(
+    assert m._material(base) == m._material(changed(
         normalized_evidence=[{**evidence, "supports_completion": False}]
     ))
-    assert m._material(base) != m._material(changed(
+    assert m._material(base) == m._material(changed(
         normalized_evidence=[{**evidence, "evidence_type": "TEST"}]
     ))
-    assert m._material(base) != m._material(changed(
+    assert m._material(base) == m._material(changed(
         criterion_results=[{"criterion_index": 0, "status": m.SATISFIED, "evidence_refs": []}]
     ))
     assert m._material(base) == m._material(changed(reason="Different reason prose."))

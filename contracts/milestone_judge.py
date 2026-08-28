@@ -367,21 +367,21 @@ def _validate_evaluation(result: Dict[str, Any], snapshot: Dict[str, Any]) -> No
 
 
 def _material(result: Dict[str, Any]) -> tuple:
-    evidence_structure = tuple(
-        (item["url"], item["accessible"], tuple(item["relevant_criteria"]),
-         item["supports_completion"], item["evidence_type"])
-        for item in result["normalized_evidence"]
-    )
-    criterion_structure = tuple(
-        (item["criterion_index"], item["status"], tuple(item["evidence_refs"]))
-        for item in result["criterion_results"]
-    )
+    """Return only consensus-material adjudication outcomes.
+
+    Independent validators may reasonably differ on evidence classification,
+    criterion relevance, or supporting evidence references while still
+    agreeing on whether each acceptance criterion is satisfied. Those
+    intermediate interpretations remain validated and persisted, but they are
+    not part of equivalence consensus.
+    """
     return (
-        result["verdict"], result["satisfied_criteria_count"], result["total_criteria_count"],
-        result["accessible_evidence_count"], result["total_evidence_count"],
+        result["verdict"],
+        result["satisfied_criteria_count"],
+        result["total_criteria_count"],
+        result["accessible_evidence_count"],
+        result["total_evidence_count"],
         tuple(result["criterion_statuses"]),
-        evidence_structure,
-        criterion_structure,
     )
 
 

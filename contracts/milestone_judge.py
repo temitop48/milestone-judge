@@ -106,55 +106,116 @@ def _status_is_valid(status: str) -> bool:
     return status in (SATISFIED, PARTIALLY_SATISFIED, UNSATISFIED, UNVERIFIABLE)
 
 
+def _canonical_indexes(values: Any, upper_bound: int, error_message: str) -> List[int]:
+    """Validate and canonicalize zero-based integer indexes."""
+    if not isinstance(values, list):
+        _error(error_message)
+
+    indexes = []
+    for value in values:
+        if (
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or value < 0
+            or value >= upper_bound
+        ):
+            _error(error_message)
+        if value not in indexes:
+            indexes.append(value)
+
+    indexes.sort()
+    return indexes
+
+
 def _normalize_item(url: str, raw: Dict[str, Any], criterion_count: int) -> Dict[str, Any]:
-    """Validate one AI/web result; called independently by leader and validator."""
+    """Validate and canonicalize one independently produced evidence result."""
     if not isinstance(raw, dict):
-        _error("Malformed normalized evidence")
-    required = ("accessible", "relevant_criteria", "supports_completion", "evidence_type", "finding")
+        _error("Normalized evidence must be a JSON object")
+
+    required = (
+        "accessible",
+        "relevant_criteria",
+        "supports_completion",
+        "evidence_type",
+        "finding",
+    )
     if any(key not in raw for key in required):
-        _error("Malformed normalized evidence")
-    if not isinstance(raw["accessible"], bool):
-        _error("Malformed normalized evidence")
-    if not isinstance(raw["relevant_criteria"], list) or any(
-        not isinstance(index, int) or index < 0 or index >= criterion_count
-        for index in raw["relevant_criteria"]
-    ):
-        _error("Malformed normalized evidence")
-    if not isinstance(raw["supports_completion"], bool):
-        _error("Malformed normalized evidence")
-    if raw["evidence_type"] not in EVIDENCE_TYPES or not isinstance(raw["finding"], str):
-        _error("Malformed normalized evidence")
-    if not raw["accessible"] and (raw["supports_completion"] or raw["relevant_criteria"]):
-        _error("Inaccessible evidence cannot support completion")
+        _error("Normalized evidence is missing required fields")
+
+    accessible = raw["accessible"]
+    supports_completion = raw["supports_completion"]
+    evidence_type = raw["evidence_type"]
+    finding = raw["finding"]
+
+    if not isinstance(accessible, bool):
+        _error("Evidence accessible must be boolean")
+    if not isinstance(supports_completion, bool):
+        _error("Evidence supports_completion must be boolean")
+    if not isinstance(evidence_type, str) or evidence_type not in EVIDENCE_TYPES:
+        _error("Evidence type is invalid")
+    if not isinstance(finding, str):
+        _error("Evidence finding must be a string")
+
+    relevant_criteria = _canonical_indexes(
+        raw["relevant_criteria"],
+        criterion_count,
+        "Evidence relevant_criteria contains invalid indexes",
+    )
+
+    if not accessible:
+        if supports_completion or relevant_criteria:
+            _error("Inaccessible evidence cannot support completion")
+        if evidence_type != "INACCESSIBLE":
+            _error("Inaccessible evidence must use INACCESSIBLE evidence type")
+    elif evidence_type == "INACCESSIBLE":
+        _error("Accessible evidence cannot use INACCESSIBLE evidence type")
+
     return {
         "url": url,
-        "accessible": raw["accessible"],
-        "relevant_criteria": raw["relevant_criteria"],
-        "supports_completion": raw["supports_completion"],
-        "evidence_type": raw["evidence_type"],
-        "finding": raw["finding"],
+        "accessible": accessible,
+        "relevant_criteria": relevant_criteria,
+        "supports_completion": supports_completion,
+        "evidence_type": evidence_type,
+        "finding": finding.strip(),
     }
 
 
 def _normalize_criterion(index: int, raw: Dict[str, Any], evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
-    if not isinstance(raw, dict) or raw.get("criterion_index") != index:
-        _error("Malformed criterion result")
-    status = raw.get("status")
-    refs = raw.get("evidence_refs")
-    if not _status_is_valid(status) or not isinstance(refs, list):
-        _error("Malformed criterion result")
-    if any(
-        not isinstance(ref, int)
-        or ref < 0
-        or ref >= len(evidence)
-        or not evidence[ref]["accessible"]
-        or index not in evidence[ref]["relevant_criteria"]
-        for ref in refs
+    if not isinstance(raw, dict):
+        _error("Criterion result must be a JSON object")
+
+    criterion_index = raw.get("criterion_index")
+    if (
+        not isinstance(criterion_index, int)
+        or isinstance(criterion_index, bool)
+        or criterion_index != index
     ):
-        _error("Malformed criterion result")
+        _error("Criterion result has an invalid criterion_index")
+
+    status = raw.get("status")
+    if not isinstance(status, str) or not _status_is_valid(status):
+        _error("Criterion result has an invalid status")
+
+    refs = _canonical_indexes(
+        raw.get("evidence_refs"),
+        len(evidence),
+        "Criterion result contains invalid evidence_refs",
+    )
+
+    for ref in refs:
+        if not evidence[ref]["accessible"]:
+            _error("Criterion result references inaccessible evidence")
+        if index not in evidence[ref]["relevant_criteria"]:
+            _error("Criterion result references evidence unrelated to the criterion")
+
     if status in (SATISFIED, PARTIALLY_SATISFIED) and not refs:
         _error("Satisfied or partially satisfied criteria require evidence references")
-    return {"criterion_index": index, "status": status, "evidence_refs": refs}
+
+    return {
+        "criterion_index": index,
+        "status": status,
+        "evidence_refs": refs,
+    }
 
 
 def _deterministic_verdict(statuses: List[str], accessible_count: int) -> str:
@@ -186,11 +247,19 @@ def _evaluate_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
             }, len(snapshot["acceptance_criteria"])))
             continue
         prompt = (
-            "Classify this milestone evidence as JSON. Do not invent facts.\n"
+            "Classify this milestone evidence. Return ONLY one JSON object and do not invent facts.\n"
+            "Criteria use ZERO-BASED indexes 0 through "
+            + str(len(snapshot["acceptance_criteria"]) - 1) + ".\n"
             "Criteria: " + repr(snapshot["acceptance_criteria"]) + "\n"
             "Evidence URL: " + url + "\nPage: " + str(page) + "\n"
-            "Return keys accessible (boolean), relevant_criteria (list of integer indexes), "
-            "supports_completion (boolean), evidence_type (string), finding (string)."
+            "The JSON object MUST contain exactly these semantic fields:\n"
+            "- accessible: boolean\n"
+            "- relevant_criteria: list of unique ZERO-BASED integer criterion indexes; use [] if none\n"
+            "- supports_completion: boolean\n"
+            "- evidence_type: exactly one of DOCUMENTATION, CODE, TEST, DEPLOYMENT, DESIGN, OTHER, INACCESSIBLE\n"
+            "- finding: string\n"
+            "If accessible is false, relevant_criteria MUST be [], supports_completion MUST be false, "
+            "and evidence_type MUST be INACCESSIBLE."
         )
         raw = gl.nondet.exec_prompt(prompt, response_format="json")
         normalized.append(_normalize_item(url, raw, len(snapshot["acceptance_criteria"])))
@@ -198,11 +267,17 @@ def _evaluate_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     criterion_results = []
     for index, criterion in enumerate(snapshot["acceptance_criteria"]):
         prompt = (
-            "Evaluate exactly one milestone acceptance criterion as JSON.\n"
+            "Evaluate exactly one milestone acceptance criterion. Return ONLY one JSON object.\n"
             "Criterion index: " + str(index) + "\nCriterion: " + criterion + "\n"
-            "Normalized evidence: " + repr(normalized) + "\n"
-            "Return criterion_index, status (SATISFIED, PARTIALLY_SATISFIED, "
-            "UNSATISFIED, or UNVERIFIABLE), and evidence_refs (list of evidence indexes)."
+            "Normalized evidence uses ZERO-BASED evidence indexes:\n" + repr(normalized) + "\n"
+            "The JSON object MUST contain:\n"
+            "- criterion_index: exactly " + str(index) + "\n"
+            "- status: exactly one of SATISFIED, PARTIALLY_SATISFIED, UNSATISFIED, UNVERIFIABLE\n"
+            "- evidence_refs: list of unique ZERO-BASED integer evidence indexes\n"
+            "Every evidence_refs entry MUST reference accessible evidence whose relevant_criteria "
+            "contains criterion index " + str(index) + ".\n"
+            "SATISFIED or PARTIALLY_SATISFIED MUST have at least one evidence reference. "
+            "Use [] when no qualifying evidence supports the criterion."
         )
         raw = gl.nondet.exec_prompt(prompt, response_format="json")
         criterion_results.append(_normalize_criterion(index, raw, normalized))

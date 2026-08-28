@@ -75,7 +75,7 @@ def test_invalid_and_duplicate_evidence_urls_are_rejected():
 
 
 def test_malformed_normalized_evidence_is_rejected():
-    with pytest.raises(Exception, match="Malformed normalized evidence"):
+    with pytest.raises(Exception, match="missing required fields"):
         m._normalize_item("https://example.com", {"accessible": True}, 1)
 
 
@@ -103,14 +103,14 @@ def test_inaccessible_evidence_cannot_support_completion_or_be_referenced():
     with pytest.raises(Exception, match="Inaccessible"):
         m._normalize_item("https://example.com", item, 1)
     inaccessible = [{**item, "supports_completion": False}]
-    with pytest.raises(Exception, match="Malformed criterion result"):
+    with pytest.raises(Exception, match="inaccessible evidence"):
         m._normalize_criterion(0, {"criterion_index": 0, "status": m.SATISFIED, "evidence_refs": [0]}, inaccessible)
 
 
 def test_malformed_criterion_result_is_rejected():
-    with pytest.raises(Exception, match="Malformed criterion result"):
+    with pytest.raises(Exception, match="invalid status"):
         m._normalize_criterion(0, {"criterion_index": 0, "status": "BAD", "evidence_refs": []}, [])
-    with pytest.raises(Exception, match="Malformed criterion result"):
+    with pytest.raises(Exception, match="invalid evidence_refs"):
         m._normalize_criterion(0, {"criterion_index": 0, "status": m.SATISFIED, "evidence_refs": [2]}, [])
 
 
@@ -122,10 +122,123 @@ def test_criterion_indexes_and_references_are_exact():
     assert m._normalize_criterion(0, {
         "criterion_index": 0, "status": m.SATISFIED, "evidence_refs": [0]
     }, evidence)["criterion_index"] == 0
-    with pytest.raises(Exception, match="Malformed criterion result"):
+    with pytest.raises(Exception, match="invalid criterion_index"):
         m._normalize_criterion(1, {"criterion_index": 0, "status": m.SATISFIED, "evidence_refs": [0]}, evidence)
     with pytest.raises(Exception, match="require evidence"):
         m._normalize_criterion(0, {"criterion_index": 0, "status": m.SATISFIED, "evidence_refs": []}, evidence)
+
+
+def test_indexes_are_canonicalized_to_sorted_unique_values():
+    item = {
+        "accessible": True,
+        "relevant_criteria": [2, 0, 2, 1, 0],
+        "supports_completion": True,
+        "evidence_type": "CODE",
+        "finding": "  implementation found  ",
+    }
+    normalized = m._normalize_item("https://example.com", item, 3)
+
+    assert normalized["relevant_criteria"] == [0, 1, 2]
+    assert normalized["finding"] == "implementation found"
+
+
+def test_boolean_indexes_are_rejected():
+    item = {
+        "accessible": True,
+        "relevant_criteria": [True],
+        "supports_completion": True,
+        "evidence_type": "CODE",
+        "finding": "found",
+    }
+    with pytest.raises(Exception, match="invalid indexes"):
+        m._normalize_item("https://example.com", item, 2)
+
+    evidence = [{
+        "url": "https://example.com",
+        "accessible": True,
+        "relevant_criteria": [0],
+        "supports_completion": True,
+        "evidence_type": "CODE",
+        "finding": "found",
+    }]
+    with pytest.raises(Exception, match="invalid evidence_refs"):
+        m._normalize_criterion(
+            0,
+            {"criterion_index": 0, "status": m.SATISFIED, "evidence_refs": [True]},
+            evidence,
+        )
+
+    with pytest.raises(Exception, match="invalid criterion_index"):
+        m._normalize_criterion(
+            0,
+            {"criterion_index": False, "status": m.SATISFIED, "evidence_refs": [0]},
+            evidence,
+        )
+
+
+def test_inaccessible_evidence_type_invariants_are_enforced():
+    inaccessible_wrong_type = {
+        "accessible": False,
+        "relevant_criteria": [],
+        "supports_completion": False,
+        "evidence_type": "OTHER",
+        "finding": "unavailable",
+    }
+    with pytest.raises(Exception, match="must use INACCESSIBLE"):
+        m._normalize_item("https://example.com", inaccessible_wrong_type, 1)
+
+    accessible_wrong_type = {
+        "accessible": True,
+        "relevant_criteria": [0],
+        "supports_completion": False,
+        "evidence_type": "INACCESSIBLE",
+        "finding": "available",
+    }
+    with pytest.raises(Exception, match="cannot use INACCESSIBLE"):
+        m._normalize_item("https://example.com", accessible_wrong_type, 1)
+
+
+def test_criterion_evidence_refs_are_canonicalized():
+    evidence = [
+        {
+            "url": "https://example.com/0",
+            "accessible": True,
+            "relevant_criteria": [0],
+            "supports_completion": True,
+            "evidence_type": "CODE",
+            "finding": "one",
+        },
+        {
+            "url": "https://example.com/1",
+            "accessible": True,
+            "relevant_criteria": [0],
+            "supports_completion": True,
+            "evidence_type": "TEST",
+            "finding": "two",
+        },
+    ]
+
+    result = m._normalize_criterion(
+        0,
+        {
+            "criterion_index": 0,
+            "status": m.SATISFIED,
+            "evidence_refs": [1, 0, 1],
+        },
+        evidence,
+    )
+
+    assert result["evidence_refs"] == [0, 1]
+
+
+def test_prompts_define_zero_based_indexes_and_allowed_values():
+    source = SOURCE.read_text()
+
+    assert "Criteria use ZERO-BASED indexes" in source
+    assert "unique ZERO-BASED integer criterion indexes" in source
+    assert "DOCUMENTATION, CODE, TEST, DEPLOYMENT, DESIGN, OTHER, INACCESSIBLE" in source
+    assert "Normalized evidence uses ZERO-BASED evidence indexes" in source
+    assert "unique ZERO-BASED integer evidence indexes" in source
 
 
 def test_evaluation_structure_binds_counts_statuses_verdict_and_all_nonprose_material():
@@ -296,6 +409,14 @@ def test_sender_address_is_converted_to_string_before_storage():
 def test_normalized_evidence_url_is_deterministic_not_model_supplied():
     source = Path("contracts/milestone_judge.py").read_text()
 
-    assert 'required = ("accessible", "relevant_criteria", "supports_completion", "evidence_type", "finding")' in source
+    for field in (
+        "accessible",
+        "relevant_criteria",
+        "supports_completion",
+        "evidence_type",
+        "finding",
+    ):
+        assert f'"{field}"' in source
+
     assert '"url": url' in source
     assert 'raw["url"]' not in source

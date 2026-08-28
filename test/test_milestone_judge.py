@@ -75,8 +75,8 @@ def test_invalid_and_duplicate_evidence_urls_are_rejected():
 
 
 def test_malformed_normalized_evidence_is_rejected():
-    with pytest.raises(Exception, match="missing required fields"):
-        m._normalize_item("https://example.com", {"accessible": True}, 1)
+    with pytest.raises(Exception, match="missing relevant_criteria"):
+        m._normalize_item("https://example.com", {"accessible": True}, 1, accessible=True)
 
 
 @pytest.mark.parametrize("field, value", [
@@ -92,7 +92,7 @@ def test_normalized_evidence_material_fields_are_validated(field, value):
     }
     item[field] = value
     with pytest.raises(Exception):
-        m._normalize_item("https://example.com", item, 1)
+        m._normalize_item("https://example.com", item, 1, accessible=item.get("accessible", True))
 
 
 def test_inaccessible_evidence_cannot_support_completion_or_be_referenced():
@@ -101,10 +101,88 @@ def test_inaccessible_evidence_cannot_support_completion_or_be_referenced():
         "supports_completion": True, "evidence_type": "INACCESSIBLE", "finding": "unavailable",
     }
     with pytest.raises(Exception, match="Inaccessible"):
-        m._normalize_item("https://example.com", item, 1)
+        m._normalize_item("https://example.com", item, 1, accessible=item.get("accessible", True))
     inaccessible = [{**item, "supports_completion": False}]
     with pytest.raises(Exception, match="inaccessible evidence"):
         m._normalize_criterion(0, {"criterion_index": 0, "status": m.SATISFIED, "evidence_refs": [0]}, inaccessible)
+
+
+
+def test_accessibility_is_derived_from_contract_control_flow():
+    raw = {
+        "relevant_criteria": [0],
+        "supports_completion": True,
+        "evidence_type": "CODE",
+        "finding": "implementation found",
+    }
+
+    normalized = m._normalize_item(
+        "https://example.com",
+        raw,
+        1,
+        accessible=True,
+    )
+
+    assert normalized["accessible"] is True
+    assert normalized["relevant_criteria"] == [0]
+    assert normalized["supports_completion"] is True
+    assert normalized["evidence_type"] == "CODE"
+
+
+def test_model_accessible_field_does_not_override_contract_accessibility():
+    raw = {
+        "accessible": False,
+        "relevant_criteria": [0],
+        "supports_completion": True,
+        "evidence_type": "CODE",
+    }
+
+    normalized = m._normalize_item(
+        "https://example.com",
+        raw,
+        1,
+        accessible=True,
+    )
+
+    assert normalized["accessible"] is True
+
+
+def test_normalized_evidence_finding_is_optional():
+    raw = {
+        "relevant_criteria": [0],
+        "supports_completion": True,
+        "evidence_type": "TEST",
+    }
+
+    normalized = m._normalize_item(
+        "https://example.com",
+        raw,
+        1,
+        accessible=True,
+    )
+
+    assert normalized["finding"] == ""
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    ["relevant_criteria", "supports_completion", "evidence_type"],
+)
+def test_material_normalized_evidence_fields_remain_required(missing_field):
+    raw = {
+        "relevant_criteria": [0],
+        "supports_completion": True,
+        "evidence_type": "CODE",
+    }
+    del raw[missing_field]
+
+    with pytest.raises(Exception, match=missing_field):
+        m._normalize_item(
+            "https://example.com",
+            raw,
+            1,
+            accessible=True,
+        )
 
 
 def test_malformed_criterion_result_is_rejected():
@@ -136,7 +214,7 @@ def test_indexes_are_canonicalized_to_sorted_unique_values():
         "evidence_type": "CODE",
         "finding": "  implementation found  ",
     }
-    normalized = m._normalize_item("https://example.com", item, 3)
+    normalized = m._normalize_item("https://example.com", item, 3, accessible=True)
 
     assert normalized["relevant_criteria"] == [0, 1, 2]
     assert normalized["finding"] == "implementation found"
@@ -151,7 +229,7 @@ def test_boolean_indexes_are_rejected():
         "finding": "found",
     }
     with pytest.raises(Exception, match="invalid indexes"):
-        m._normalize_item("https://example.com", item, 2)
+        m._normalize_item("https://example.com", item, 2, accessible=True)
 
     evidence = [{
         "url": "https://example.com",
@@ -185,7 +263,7 @@ def test_inaccessible_evidence_type_invariants_are_enforced():
         "finding": "unavailable",
     }
     with pytest.raises(Exception, match="must use INACCESSIBLE"):
-        m._normalize_item("https://example.com", inaccessible_wrong_type, 1)
+        m._normalize_item("https://example.com", inaccessible_wrong_type, 1, accessible=False)
 
     accessible_wrong_type = {
         "accessible": True,
@@ -195,7 +273,7 @@ def test_inaccessible_evidence_type_invariants_are_enforced():
         "finding": "available",
     }
     with pytest.raises(Exception, match="cannot use INACCESSIBLE"):
-        m._normalize_item("https://example.com", accessible_wrong_type, 1)
+        m._normalize_item("https://example.com", accessible_wrong_type, 1, accessible=True)
 
 
 def test_criterion_evidence_refs_are_canonicalized():

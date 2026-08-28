@@ -127,25 +127,27 @@ def _canonical_indexes(values: Any, upper_bound: int, error_message: str) -> Lis
     return indexes
 
 
-def _normalize_item(url: str, raw: Dict[str, Any], criterion_count: int) -> Dict[str, Any]:
+def _normalize_item(
+    url: str,
+    raw: Dict[str, Any],
+    criterion_count: int,
+    *,
+    accessible: bool,
+) -> Dict[str, Any]:
     """Validate and canonicalize one independently produced evidence result."""
     if not isinstance(raw, dict):
         _error("Normalized evidence must be a JSON object")
 
-    required = (
-        "accessible",
-        "relevant_criteria",
-        "supports_completion",
-        "evidence_type",
-        "finding",
-    )
-    if any(key not in raw for key in required):
-        _error("Normalized evidence is missing required fields")
+    if "relevant_criteria" not in raw:
+        _error("Normalized evidence is missing relevant_criteria")
+    if "supports_completion" not in raw:
+        _error("Normalized evidence is missing supports_completion")
+    if "evidence_type" not in raw:
+        _error("Normalized evidence is missing evidence_type")
 
-    accessible = raw["accessible"]
     supports_completion = raw["supports_completion"]
     evidence_type = raw["evidence_type"]
-    finding = raw["finding"]
+    finding = raw.get("finding", "")
 
     if not isinstance(accessible, bool):
         _error("Evidence accessible must be boolean")
@@ -237,14 +239,17 @@ def _evaluate_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
         try:
             page = gl.nondet.web.render(url, mode="text")
         except Exception:
-            normalized.append(_normalize_item(url, {
-                "url": url,
-                "accessible": False,
-                "relevant_criteria": [],
-                "supports_completion": False,
-                "evidence_type": "INACCESSIBLE",
-                "finding": "Evidence could not be accessed.",
-            }, len(snapshot["acceptance_criteria"])))
+            normalized.append(_normalize_item(
+                url,
+                {
+                    "relevant_criteria": [],
+                    "supports_completion": False,
+                    "evidence_type": "INACCESSIBLE",
+                    "finding": "Evidence could not be accessed.",
+                },
+                len(snapshot["acceptance_criteria"]),
+                accessible=False,
+            ))
             continue
         prompt = (
             "Classify this milestone evidence. Return ONLY one JSON object and do not invent facts.\n"
@@ -253,16 +258,22 @@ def _evaluate_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
             "Criteria: " + repr(snapshot["acceptance_criteria"]) + "\n"
             "Evidence URL: " + url + "\nPage: " + str(page) + "\n"
             "The JSON object MUST contain exactly these semantic fields:\n"
-            "- accessible: boolean\n"
             "- relevant_criteria: list of unique ZERO-BASED integer criterion indexes; use [] if none\n"
             "- supports_completion: boolean\n"
             "- evidence_type: exactly one of DOCUMENTATION, CODE, TEST, DEPLOYMENT, DESIGN, OTHER, INACCESSIBLE\n"
-            "- finding: string\n"
-            "If accessible is false, relevant_criteria MUST be [], supports_completion MUST be false, "
-            "and evidence_type MUST be INACCESSIBLE."
+            "- finding: string; optional explanatory text\n"
+            "The page has already been fetched successfully, so do NOT return an accessible field. "
+            "Do not use INACCESSIBLE as the evidence_type."
         )
         raw = gl.nondet.exec_prompt(prompt, response_format="json")
-        normalized.append(_normalize_item(url, raw, len(snapshot["acceptance_criteria"])))
+        normalized.append(
+            _normalize_item(
+                url,
+                raw,
+                len(snapshot["acceptance_criteria"]),
+                accessible=True,
+            )
+        )
 
     criterion_results = []
     for index, criterion in enumerate(snapshot["acceptance_criteria"]):
@@ -326,7 +337,16 @@ def _validate_evaluation(result: Dict[str, Any], snapshot: Dict[str, Any]) -> No
         _error("Malformed adjudication result")
     normalized = []
     for url, item in zip(snapshot["evidence_urls"], result["normalized_evidence"]):
-        normalized.append(_normalize_item(url, item, len(snapshot["acceptance_criteria"])))
+        if not isinstance(item, dict) or not isinstance(item.get("accessible"), bool):
+            _error("Malformed adjudication result")
+        normalized.append(
+            _normalize_item(
+                url,
+                item,
+                len(snapshot["acceptance_criteria"]),
+                accessible=item["accessible"],
+            )
+        )
     criterion_results = []
     for index, item in enumerate(result["criterion_results"]):
         criterion_results.append(_normalize_criterion(index, item, normalized))

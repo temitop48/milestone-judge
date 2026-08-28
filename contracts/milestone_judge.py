@@ -110,11 +110,9 @@ def _normalize_item(url: str, raw: Dict[str, Any], criterion_count: int) -> Dict
     """Validate one AI/web result; called independently by leader and validator."""
     if not isinstance(raw, dict):
         _error("Malformed normalized evidence")
-    required = ("url", "accessible", "relevant_criteria", "supports_completion", "evidence_type", "finding")
+    required = ("accessible", "relevant_criteria", "supports_completion", "evidence_type", "finding")
     if any(key not in raw for key in required):
         _error("Malformed normalized evidence")
-    if raw["url"] != url:
-        _error("Normalized evidence URL does not match submitted URL")
     if not isinstance(raw["accessible"], bool):
         _error("Malformed normalized evidence")
     if not isinstance(raw["relevant_criteria"], list) or any(

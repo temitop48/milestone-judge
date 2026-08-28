@@ -80,7 +80,6 @@ def test_malformed_normalized_evidence_is_rejected():
 
 
 @pytest.mark.parametrize("field, value", [
-    ("url", "https://other.example"),
     ("accessible", "yes"),
     ("supports_completion", "yes"),
     ("relevant_criteria", [9]),
@@ -293,3 +292,10 @@ def test_sender_address_is_converted_to_string_before_storage():
 
     assert "str(gl.message.sender_address)" in source
     assert "milestone_id, gl.message.sender_address," not in source
+
+def test_normalized_evidence_url_is_deterministic_not_model_supplied():
+    source = Path("contracts/milestone_judge.py").read_text()
+
+    assert 'required = ("accessible", "relevant_criteria", "supports_completion", "evidence_type", "finding")' in source
+    assert '"url": url' in source
+    assert 'raw["url"]' not in source

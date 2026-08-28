@@ -75,7 +75,7 @@ def test_invalid_and_duplicate_evidence_urls_are_rejected():
 
 
 def test_malformed_normalized_evidence_is_rejected():
-    with pytest.raises(Exception, match="missing relevant_criteria"):
+    with pytest.raises(Exception, match="missing supports_completion"):
         m._normalize_item("https://example.com", {"accessible": True}, 1, accessible=True)
 
 
@@ -164,9 +164,28 @@ def test_normalized_evidence_finding_is_optional():
     assert normalized["finding"] == ""
 
 
+def test_missing_relevant_criteria_defaults_to_empty_list():
+    raw = {
+        "supports_completion": False,
+        "evidence_type": "CODE",
+        "finding": "Evidence classification omitted criterion relevance.",
+    }
+
+    normalized = m._normalize_item(
+        "https://example.com",
+        raw,
+        3,
+        accessible=True,
+    )
+
+    assert normalized["relevant_criteria"] == []
+    assert normalized["supports_completion"] is False
+    assert normalized["evidence_type"] == "CODE"
+
+
 @pytest.mark.parametrize(
     "missing_field",
-    ["relevant_criteria", "supports_completion", "evidence_type"],
+    ["supports_completion", "evidence_type"],
 )
 def test_material_normalized_evidence_fields_remain_required(missing_field):
     raw = {

@@ -138,8 +138,6 @@ def _normalize_item(
     if not isinstance(raw, dict):
         _error("Normalized evidence must be a JSON object")
 
-    if "relevant_criteria" not in raw:
-        _error("Normalized evidence is missing relevant_criteria")
     if "supports_completion" not in raw:
         _error("Normalized evidence is missing supports_completion")
     if "evidence_type" not in raw:
@@ -159,7 +157,7 @@ def _normalize_item(
         _error("Evidence finding must be a string")
 
     relevant_criteria = _canonical_indexes(
-        raw["relevant_criteria"],
+        raw.get("relevant_criteria", []),
         criterion_count,
         "Evidence relevant_criteria contains invalid indexes",
     )

@@ -431,20 +431,25 @@ class MilestoneJudge(gl.Contract):
             "evidence_urls": list(milestone.evidence_urls),
         }
 
-        def leader():
+        def evaluate():
             result = _evaluate_snapshot(snapshot)
             _validate_evaluation(result, snapshot)
             return result
 
-        def validator(proposed):
-            _validate_evaluation(proposed, snapshot)
-            independent = _evaluate_snapshot(snapshot)
-            _validate_evaluation(independent, snapshot)
-            if _material(independent) != _material(proposed):
-                _error("Validator disagreed with material adjudication")
-            return True
-
-        result = gl.vm.run_nondet(leader, validator)
+        result = gl.eq_principle.prompt_comparative(
+            evaluate,
+            principle=(
+                "Determine whether the two milestone adjudications are materially equivalent. "
+                "The overall verdict must represent the same milestone completion outcome. "
+                "Criterion conclusions must be substantively consistent with that overall outcome. "
+                "Differences in explanatory text, evidence_type, relevant_criteria, "
+                "supports_completion, finding text, or exact evidence_refs are acceptable "
+                "when they do not change the substantive milestone completion decision. "
+                "COMPLETED, PARTIALLY_COMPLETED, NOT_COMPLETED, and INSUFFICIENT_EVIDENCE "
+                "are distinct outcomes and must not be treated as equivalent."
+            ),
+        )
+        _validate_evaluation(result, snapshot)
         self.adjudications[milestone_id] = Adjudication(
             milestone_id=milestone_id,
             verdict=result["verdict"],

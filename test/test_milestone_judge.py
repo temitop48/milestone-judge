@@ -380,62 +380,14 @@ def test_verdict_mapping_is_deterministic_without_numeric_score():
     assert m._deterministic_verdict([m.UNVERIFIABLE], 0) == m.INSUFFICIENT_EVIDENCE
 
 
-def test_material_consensus_rejects_verdict_status_and_count_disagreement():
-    evidence = {
-        "url": "https://example.com/release",
-        "accessible": True,
-        "relevant_criteria": [0],
-        "supports_completion": True,
-        "evidence_type": "DEPLOYMENT",
-        "finding": "A public release is available.",
-    }
-    base = {
-        "verdict": m.COMPLETED,
-        "satisfied_criteria_count": 1,
-        "total_criteria_count": 1,
-        "accessible_evidence_count": 1,
-        "total_evidence_count": 1,
-        "criterion_statuses": [m.SATISFIED],
-        "reason": "The release satisfies the criterion.",
-        "normalized_evidence": [evidence],
-        "criterion_results": [{
-            "criterion_index": 0,
-            "status": m.SATISFIED,
-            "evidence_refs": [0],
-        }],
-    }
+def test_adjudication_uses_comparative_equivalence_with_explicit_principle():
+    source = SOURCE.read_text()
 
-    def changed(**changes):
-        result = {**base, "normalized_evidence": [dict(evidence)],
-                  "criterion_results": [dict(base["criterion_results"][0])]}
-        result.update(changes)
-        return result
-
-    assert m._material(base) != m._material({**base, "verdict": m.NOT_COMPLETED})
-    assert m._material(base) != m._material(changed(satisfied_criteria_count=0))
-    assert m._material(base) != m._material(changed(total_criteria_count=2))
-    assert m._material(base) != m._material(changed(accessible_evidence_count=0))
-    assert m._material(base) != m._material(changed(total_evidence_count=0))
-    assert m._material(base) != m._material({**base, "criterion_statuses": [m.UNSATISFIED]})
-    assert m._material(base) == m._material(changed(
-        normalized_evidence=[{**evidence, "accessible": False}]
-    ))
-    assert m._material(base) == m._material(changed(
-        normalized_evidence=[{**evidence, "relevant_criteria": []}]
-    ))
-    assert m._material(base) == m._material(changed(
-        normalized_evidence=[{**evidence, "supports_completion": False}]
-    ))
-    assert m._material(base) == m._material(changed(
-        normalized_evidence=[{**evidence, "evidence_type": "TEST"}]
-    ))
-    assert m._material(base) == m._material(changed(
-        criterion_results=[{"criterion_index": 0, "status": m.SATISFIED, "evidence_refs": []}]
-    ))
-    assert m._material(base) == m._material(changed(reason="Different reason prose."))
-    assert m._material(base) == m._material(changed(
-        normalized_evidence=[{**evidence, "finding": "Different finding prose."}]
-    ))
+    assert "gl.eq_principle.prompt_comparative(" in source
+    assert "Determine whether the two milestone adjudications are materially equivalent." in source
+    assert "COMPLETED, PARTIALLY_COMPLETED, NOT_COMPLETED, and INSUFFICIENT_EVIDENCE" in source
+    assert "must not be treated as equivalent" in source
+    assert "gl.vm.run_nondet" not in source
 
 
 def test_contract_surface_and_lifecycle_invariants():
@@ -478,11 +430,11 @@ def test_lifecycle_rejects_missing_duplicate_and_resubmitted_operations():
         contract.submit_evidence("m1", ["https://example.com/other"])
 
 
-def test_storage_snapshot_precedes_nondeterministic_callbacks():
+def test_storage_snapshot_precedes_comparative_evaluation():
     source = SOURCE.read_text()
     snapshot_at = source.index("snapshot = {")
-    nondet_at = source.index("gl.vm.run_nondet")
-    assert snapshot_at < nondet_at
+    comparative_at = source.index("gl.eq_principle.prompt_comparative(")
+    assert snapshot_at < comparative_at
     assert '"acceptance_criteria": list(milestone.acceptance_criteria)' in source
     assert '"evidence_urls": list(milestone.evidence_urls)' in source
 

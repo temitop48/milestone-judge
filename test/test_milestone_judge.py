@@ -75,8 +75,8 @@ def test_invalid_and_duplicate_evidence_urls_are_rejected():
 
 
 def test_malformed_normalized_evidence_is_rejected():
-    with pytest.raises(Exception, match="missing supports_completion"):
-        m._normalize_item("https://example.com", {"accessible": True}, 1, accessible=True)
+    with pytest.raises(Exception, match="JSON object"):
+        m._normalize_item("https://example.com", "not-an-object", 1, accessible=True)
 
 
 @pytest.mark.parametrize("field, value", [
@@ -183,25 +183,40 @@ def test_missing_relevant_criteria_defaults_to_empty_list():
     assert normalized["evidence_type"] == "CODE"
 
 
-@pytest.mark.parametrize(
-    "missing_field",
-    ["supports_completion", "evidence_type"],
-)
-def test_material_normalized_evidence_fields_remain_required(missing_field):
+def test_missing_supports_completion_defaults_to_false():
+    raw = {
+        "relevant_criteria": [0],
+        "evidence_type": "CODE",
+    }
+
+    normalized = m._normalize_item(
+        "https://example.com",
+        raw,
+        1,
+        accessible=True,
+    )
+
+    assert normalized["supports_completion"] is False
+    assert normalized["relevant_criteria"] == [0]
+    assert normalized["evidence_type"] == "CODE"
+
+
+def test_missing_evidence_type_defaults_to_other():
     raw = {
         "relevant_criteria": [0],
         "supports_completion": True,
-        "evidence_type": "CODE",
     }
-    del raw[missing_field]
 
-    with pytest.raises(Exception, match=missing_field):
-        m._normalize_item(
-            "https://example.com",
-            raw,
-            1,
-            accessible=True,
-        )
+    normalized = m._normalize_item(
+        "https://example.com",
+        raw,
+        1,
+        accessible=True,
+    )
+
+    assert normalized["evidence_type"] == "OTHER"
+    assert normalized["supports_completion"] is True
+    assert normalized["relevant_criteria"] == [0]
 
 
 def test_malformed_criterion_result_is_rejected():

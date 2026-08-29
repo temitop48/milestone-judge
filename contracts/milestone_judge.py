@@ -138,13 +138,8 @@ def _normalize_item(
     if not isinstance(raw, dict):
         _error("Normalized evidence must be a JSON object")
 
-    if "supports_completion" not in raw:
-        _error("Normalized evidence is missing supports_completion")
-    if "evidence_type" not in raw:
-        _error("Normalized evidence is missing evidence_type")
-
-    supports_completion = raw["supports_completion"]
-    evidence_type = raw["evidence_type"]
+    supports_completion = raw.get("supports_completion", False)
+    evidence_type = raw.get("evidence_type", "OTHER")
     finding = raw.get("finding", "")
 
     if not isinstance(accessible, bool):
@@ -255,10 +250,11 @@ def _evaluate_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
             + str(len(snapshot["acceptance_criteria"]) - 1) + ".\n"
             "Criteria: " + repr(snapshot["acceptance_criteria"]) + "\n"
             "Evidence URL: " + url + "\nPage: " + str(page) + "\n"
-            "The JSON object MUST contain exactly these semantic fields:\n"
+            "Return these semantic fields when available; omitted fields use the conservative defaults described below:\n"
             "- relevant_criteria: list of unique ZERO-BASED integer criterion indexes; use [] if none\n"
-            "- supports_completion: boolean\n"
-            "- evidence_type: exactly one of DOCUMENTATION, CODE, TEST, DEPLOYMENT, DESIGN, OTHER, INACCESSIBLE\n"
+            "- supports_completion: boolean; if omitted the contract conservatively treats it as false\n"
+            "- evidence_type: exactly one of DOCUMENTATION, CODE, TEST, DEPLOYMENT, DESIGN, OTHER, INACCESSIBLE; "
+            "if omitted the contract conservatively treats it as OTHER\n"
             "- finding: string; optional explanatory text\n"
             "The page has already been fetched successfully, so do NOT return an accessible field. "
             "Do not use INACCESSIBLE as the evidence_type."

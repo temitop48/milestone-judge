@@ -32,17 +32,31 @@ During adjudication:
    the substantive evaluation and determine whether their adjudications are
    materially equivalent.
 
-The comparative-equivalence principle treats the four substantive outcomes as
-distinct:
+The comparative-equivalence principle binds both the overall outcome and the
+criterion-level decision vector.
+
+Validators must agree on:
+
+- the same overall verdict
+- the same satisfied criterion count
+- the same total criterion count
+- the same substantive status for every criterion at the same zero-based index
+
+`SATISFIED`, `PARTIALLY_SATISFIED`, `UNSATISFIED`, and `UNVERIFIABLE` are
+distinct criterion outcomes. Two adjudications are not materially equivalent
+when they produce the same overall verdict but disagree about the status of any
+individual criterion.
+
+The four overall outcomes are also distinct:
 
 - `COMPLETED`
 - `PARTIALLY_COMPLETED`
 - `NOT_COMPLETED`
 - `INSUFFICIENT_EVIDENCE`
 
-Differences in explanatory prose or intermediate evidence classifications may
-be acceptable when they do not change the substantive milestone completion
-decision.
+Differences in explanatory prose, evidence classification, findings, or exact
+evidence references may be acceptable only when they do not change any
+criterion status or the overall verdict.
 
 ## Persistent GenLayer storage
 
@@ -64,6 +78,10 @@ resulting decision to remain queryable from contract state.
 A milestone follows this lifecycle:
 
 `CREATED` → `EVIDENCE_SUBMITTED` → `ADJUDICATED`
+
+Evidence submission is restricted to the address that created the milestone.
+This prevents another caller from attaching evidence to a milestone before its
+creator submits the intended evidence set.
 
 `FINAL` is reserved for a future explicit finalization flow and is not exposed
 as a current public workflow.
@@ -169,12 +187,13 @@ that were evaluated during the live Studionet run.
 ## Tests
 
 The repository includes tests covering contract validation, milestone
-lifecycle behavior, evidence normalization, malformed model output,
-criterion-result validation, snapshot ordering, storage declarations, and
-comparative-equivalence integration.
+lifecycle behavior, creator-only evidence submission, evidence normalization,
+malformed model output, criterion-result validation, snapshot ordering, storage
+declarations, and criterion-bound comparative equivalence.
 
-The frozen contract version used for the live Studionet deployment passed
-35 tests together with Python compilation and GenVM lint validation.
+The current corrected contract candidate passes 37 tests together with Python
+compilation. A new Studionet deployment will be recorded here after the
+criterion-bound consensus hardening is verified live.
 
 ## Scope
 

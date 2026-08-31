@@ -385,7 +385,12 @@ def test_adjudication_uses_comparative_equivalence_with_explicit_principle():
 
     assert "gl.eq_principle.prompt_comparative(" in source
     assert "Determine whether the two milestone adjudications are materially equivalent." in source
-    assert "COMPLETED, PARTIALLY_COMPLETED, NOT_COMPLETED, and INSUFFICIENT_EVIDENCE" in source
+    assert "The overall verdict must be identical." in source
+    assert "For every ZERO-BASED criterion index" in source
+    assert "exactly the same substantive criterion status" in source
+    assert "COMPLETED, PARTIALLY_COMPLETED, NOT_COMPLETED" in source
+    assert "INSUFFICIENT_EVIDENCE" in source
+    assert "distinct overall outcomes" in source
     assert "must not be treated as equivalent" in source
     assert "gl.vm.run_nondet" not in source
 
@@ -484,3 +489,55 @@ def test_normalized_evidence_url_is_deterministic_not_model_supplied():
 
     assert '"url": url' in source
     assert 'raw["url"]' not in source
+
+
+def test_comparative_equivalence_requires_same_status_for_every_criterion():
+    source = SOURCE.read_text()
+
+    assert "For every ZERO-BASED criterion index" in source
+    assert "exactly the same substantive criterion status" in source
+    assert (
+        "agree on the overall verdict but disagree on the status of any criterion"
+        in source
+    )
+    assert "NOT materially equivalent" in source
+    assert (
+        "SATISFIED, PARTIALLY_SATISFIED, UNSATISFIED, and UNVERIFIABLE"
+        in source
+    )
+
+
+def test_only_milestone_creator_can_submit_evidence():
+    contract = m.MilestoneJudge()
+    contract.milestones = {}
+    contract.adjudications = {}
+
+    m.gl.message.sender_address = "0xCreator"
+    contract.create_milestone(
+        "creator-only",
+        "Creator-only evidence",
+        "Only the milestone creator may submit evidence.",
+        ["Evidence must be supplied by the creator"],
+    )
+
+    m.gl.message.sender_address = "0xAttacker"
+
+    with pytest.raises(
+        Exception,
+        match="Only the milestone creator can submit evidence",
+    ):
+        contract.submit_evidence(
+            "creator-only",
+            ["https://example.com/evidence"],
+        )
+
+    assert contract.milestones["creator-only"].status == m.CREATED
+    assert list(contract.milestones["creator-only"].evidence_urls) == []
+
+    m.gl.message.sender_address = "0xCreator"
+    contract.submit_evidence(
+        "creator-only",
+        ["https://example.com/evidence"],
+    )
+
+    assert contract.milestones["creator-only"].status == m.EVIDENCE_SUBMITTED

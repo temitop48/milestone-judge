@@ -407,6 +407,8 @@ class MilestoneJudge(gl.Contract):
         if milestone_id not in self.milestones:
             _error("Milestone does not exist")
         milestone = self.milestones[milestone_id]
+        if str(gl.message.sender_address).lower() != milestone.creator.lower():
+            _error("Only the milestone creator can submit evidence")
         if milestone.status != CREATED:
             _error("Evidence can only be submitted for a CREATED milestone")
         _validate_urls(evidence_urls)
@@ -440,13 +442,18 @@ class MilestoneJudge(gl.Contract):
             evaluate,
             principle=(
                 "Determine whether the two milestone adjudications are materially equivalent. "
-                "The overall verdict must represent the same milestone completion outcome. "
-                "Criterion conclusions must be substantively consistent with that overall outcome. "
-                "Differences in explanatory text, evidence_type, relevant_criteria, "
-                "supports_completion, finding text, or exact evidence_refs are acceptable "
-                "when they do not change the substantive milestone completion decision. "
-                "COMPLETED, PARTIALLY_COMPLETED, NOT_COMPLETED, and INSUFFICIENT_EVIDENCE "
-                "are distinct outcomes and must not be treated as equivalent."
+                "The overall verdict must be identical. The satisfied_criteria_count and "
+                "total_criteria_count must be identical. For every ZERO-BASED criterion index, "
+                "both adjudications must assign exactly the same substantive criterion status. "
+                "SATISFIED, PARTIALLY_SATISFIED, UNSATISFIED, and UNVERIFIABLE are distinct "
+                "criterion outcomes and must not be treated as equivalent. Adjudications that "
+                "agree on the overall verdict but disagree on the status of any criterion are "
+                "NOT materially equivalent. Differences in explanatory prose, evidence_type, "
+                "relevant_criteria, supports_completion, finding text, or exact evidence_refs "
+                "are acceptable only when they do not alter any criterion status or the overall "
+                "verdict. COMPLETED, PARTIALLY_COMPLETED, NOT_COMPLETED, and "
+                "INSUFFICIENT_EVIDENCE are distinct overall outcomes and must not be treated "
+                "as equivalent."
             ),
         )
         _validate_evaluation(result, snapshot)
